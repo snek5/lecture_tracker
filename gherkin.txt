@@ -1,0 +1,570 @@
+# ================================================================
+# FEATURE: SEMINAR TRACKER - Flask 3.0 + HTMX Implementation
+# ================================================================
+# Tech Stack: Flask 3.0+, HTMX 1.9+, SQLite (dev) / PostgreSQL (prod)
+# Architecture: Flask Application Factory Pattern
+# Frontend: Jinja2 Templates + HTMX for SPA-like interactions
+# Auth: Flask-Login + Flask-WTF for authentication
+# Database: SQLAlchemy ORM (database agnostic)
+# ================================================================
+
+Feature: Seminar and Talk Tracker
+  As a professional or student
+  I want to track seminars and talks I've attended
+  So that I can maintain a learning record and export it for reporting
+
+  Background:
+    Given I am a registered user
+    And I am logged into the Seminar Tracker system
+    And I am on the dashboard URL "/dashboard/"
+    # Flask: Routes defined in blueprint, app factory creates instance
+
+  # ============================================================
+  # STORY 1: INPUT TALK DETAILS (Flask-WTF Forms + HTMX)
+  # ============================================================
+  
+  Scenario: Add a new seminar with HTMX modal form
+    When I click the "Add New Seminar" button (#add-seminar-btn)
+    # HTMX: hx-get="/seminar/create/" triggers modal via hx-target="#modal-container"
+    Then a modal dialog should appear with the seminar form
+    # Flask-WTF: SeminarForm with FlaskForm, using CSRF protection
+    And the form should have CSRF token {{ form.csrf_token }}
+    And the form should have fields: date, topic, speaker, hours, organizer, notes
+    # Field validation: DateField, DecimalField with validators
+    When I fill in:
+      | Field     | Value                                    |
+      | date      | 2026-05-15                              |
+      | topic     | Introduction to Machine Learning        |
+      | speaker   | Dr. Sarah Chen                         |
+      | hours     | 3.0                                     |
+      | organizer | Data Science Institute                  |
+      | notes     | Covered supervised learning basics     |
+    And I click "Save Seminar" 
+    # HTMX: hx-post="/seminar/create/" with hx-target="#seminar-list" hx-swap="afterbegin"
+    Then I should receive a 200 OK response with HTML partial
+    And the new seminar should appear at the top of the list
+    And the modal should close automatically
+    # HTMX: hx-trigger="closeModal" event dispatched
+    And I should see a toast notification: "Seminar saved successfully!"
+    # Flask: flash('Seminar saved successfully!', 'success') with HTMX OOB swap
+
+  Scenario: Add seminar with inline validation (Flask-WTF errors)
+    When I click "Add New Seminar"
+    And I submit the form with empty topic field
+    # HTMX: hx-post with validation errors returned as HTML partial
+    Then I should see field-specific errors rendered next to each invalid field
+    # Flask-WTF: form.topic.errors rendered in template
+    And the error should say "This field is required"
+    And the modal should remain open with form data preserved
+    And no database INSERT operation should occur
+    # Flask: View checks if form.validate_on_submit() before saving
+
+  Scenario: Successfully create seminar via SQLAlchemy ORM
+    When I submit valid seminar data via HTMX POST request
+    Then Flask view should call db.session.add(seminar)
+    # Model: Seminar Model with relationship to User
+    And the seminar should have user_id = current_user.id assigned
+    And the created_at timestamp should be auto-set via default=datetime.utcnow
+    And a success response with status 200 and HX-Trigger header should return
+    # HTMX: Response includes HX-Trigger: {"seminarAdded": true}
+
+
+  # ============================================================
+  # STORY 2: VIEW PREVIOUSLY ATTENDED TALKS (SQLAlchemy + HTMX)
+  # ============================================================
+  
+  Scenario: View paginated seminar list with HTMX infinite scroll
+    Given I have 50 seminars in my account
+    When I load the dashboard
+    Then the initial list should show 20 seminars (default pagination)
+    # SQLAlchemy: paginate(page=1, per_page=20) with .order_by(Seminar.date.desc())
+    When I scroll to the bottom of the list
+    # HTMX: hx-trigger="revealed" on the last item
+    Then the next page of 20 seminars should load via hx-get="/seminar/list/?page=2"
+    And the new seminars should append to the list using hx-swap="beforeend"
+    And the URL should update to "/dashboard/?page=2" via history.pushState()
+    # HTMX: hx-push-url="true"
+
+  Scenario: Search seminars with HTMX real-time filtering
+    When I type "Machine" in the search input (#search-input)
+    # HTMX: hx-post="/seminar/search/" with hx-trigger="keyup changed delay:300ms"
+    Then a POST request should be sent to the server
+    And Flask view should filter Seminar.query.filter(
+        or_(
+            Seminar.topic.ilike(f'%{search_term}%'),
+            Seminar.speaker.ilike(f'%{search_term}%'),
+            Seminar.organizer.ilike(f'%{search_term}%')
+        )
+    )
+    And the filtered results should replace the current list
+    # HTMX: hx-target="#seminar-list" hx-swap="innerHTML"
+    And a loading spinner should appear during the request
+    # HTMX: hx-indicator="#search-spinner"
+
+  Scenario: Filter seminars by organizer using SQLAlchemy
+    When I select "Data Science Institute" from the organizer filter
+    # HTMX: hx-get="/seminar/filter/?organizer=Data+Science+Institute"
+    Then the view should use Seminar.query.filter_by(organizer=organizer)
+    And the filtered list should display only matching seminars
+    And the URL should update with query parameters
+    And the filter state should persist after page refresh
+
+  Scenario: View total statistics using SQLAlchemy aggregate
+    Given I have multiple seminars with various hours
+    When I view the dashboard
+    Then I should see statistics computed via SQLAlchemy:
+      | Statistic          | SQLAlchemy Method                           |
+      | Total Seminars     | Seminar.query.filter_by(user_id=current_user.id).count() |
+      | Total Hours        | db.session.query(db.func.sum(Seminar.hours)).filter_by(user_id=current_user.id).scalar() |
+      | Average Hours      | db.session.query(db.func.avg(Seminar.hours)).filter_by(user_id=current_user.id).scalar() |
+      | Unique Organizers  | Seminar.query.with_entities(Seminar.organizer).distinct().count() |
+    # These values are passed to template in context dict via current_app
+
+  Scenario: Sort seminars by different columns with HTMX
+    When I click the "Date" column header
+    # HTMX: hx-get="/seminar/list/?sort=date&order=desc"
+    Then the list should reload sorted by date (descending by default)
+    When I click "Date" again, it should toggle to ascending order
+    And the column header should show an arrow indicator (▲/▼)
+    # Flask: Uses order_by() with dynamic field from request.args
+
+
+  # ============================================================
+  # STORY 3: EXPORT TO EXCEL (Flask + openpyxl)
+  # ============================================================
+  
+  Scenario: Export all seminars to Excel with Flask send_file
+    When I click "Export to Excel" (#export-btn)
+    # Standard GET request (not HTMX - downloads file)
+    Then Flask view should generate an Excel file using openpyxl
+    # Dependency: openpyxl in requirements.txt
+    And the response should be a send_file with:
+      | Header              | Value                                      |
+      | Content-Type        | application/vnd.openxmlformats-officedocument.spreadsheetml.sheet |
+      | Content-Disposition | attachment; filename="seminars_2026-08-10.xlsx" |
+    And the Excel should contain columns:
+      | A (Date) | B (Topic) | C (Speaker) | D (Hours) | E (Organizer) | F (Notes) |
+    And the file should download automatically in the browser
+    # Flask: Uses send_file with as_attachment=True
+
+  Scenario: Export filtered list using SQLAlchemy
+    Given I have filtered seminars by "Data Science Institute"
+    When I click "Export to Excel"
+    Then the view should export only the current queryset
+    # View checks if 'organizer' in request.args and applies filter
+    And the Excel filename should include the filter: "seminars_Data_Science_Institute_2026-08-10.xlsx"
+    And the file should contain the correct 3 seminars
+
+  Scenario: Export with background task for large datasets (Celery)
+    Given I have over 1000 seminars
+    When I click "Export to Excel"
+    # HTMX: hx-post="/seminar/export/background/" with hx-trigger="click"
+    Then Flask should queue a Celery task: export_seminars.delay(current_user.id)
+    # Requirements: Celery 5.3+, Redis broker
+    And I should see "Export started - you'll receive an email when ready"
+    # HTMX: hx-swap="innerHTML" with status message
+    And an email should be sent with a download link when complete
+    # Flask-Mail: Email with link to temporary file
+
+
+  # ============================================================
+  # FLASK AUTHENTICATION & PERMISSIONS (Flask-Login)
+  # ============================================================
+  
+  Scenario: User authentication required for all views
+    When I attempt to access "/dashboard/" without being logged in
+    Then Flask should redirect to "/auth/login/"
+    # Flask: @login_required decorator on all routes
+    And after login, I should be redirected back to the dashboard
+
+  Scenario: Users can only see their own seminars
+    Given user "alice" has 5 seminars
+    And user "bob" has 3 seminars
+    When "alice" logs in and views the dashboard
+    Then Seminar.query.filter_by(user_id=current_user.id) should return only 5 seminars
+    And Bob's seminars should not be visible
+
+  Scenario: Registration with Flask-WTF registration form
+    When I visit "/auth/register/"
+    And I fill in:
+      | Field            | Value              |
+      | Username         | john_doe           |
+      | Email            | john@example.com   |
+      | Password         | SecurePass123!     |
+      | Confirm Password | SecurePass123!     |
+    And I submit the form
+    Then Flask should create a new User model instance
+    And I should be logged in automatically via login_user()
+    And I should be redirected to "/dashboard/"
+    # Flask: signals or post-registration hook create empty Seminar list
+
+  Scenario: Password reset via Flask-Mail
+    When I click "Forgot Password?"
+    And I enter my registered email
+    Then Flask should send a password reset email
+    # Flask-Mail: Mail instance with SMTP configuration
+    And I should see "Password reset email sent" message
+
+
+  # ============================================================
+  # FLASK APPLICATION FACTORY PATTERN
+  # ============================================================
+  
+  Scenario: Application factory creates Flask app instance
+    Given the application uses create_app() factory function
+    Then the factory should:
+      | Step                    | Implementation                              |
+      | Load config             | app.config.from_object(config_class)        |
+      | Initialize extensions   | db.init_app(app), login_manager.init_app(app) |
+      | Register blueprints     | app.register_blueprint(seminar_bp)          |
+      | Register error handlers | @app.errorhandler(404)                      |
+      | Create database tables  | db.create_all(app=app)                     |
+    And the app instance should be ready for development or production
+
+  Scenario: Configuration management with application factory
+    Given the application has multiple config classes:
+      | Config Class   | Environment   | Key Settings                      |
+      | Development    | dev           | DEBUG=True, SQLALCHEMY_DATABASE_URI='sqlite:///dev.db' |
+      | Production     | prod          | DEBUG=False, SQLALCHEMY_DATABASE_URI=os.environ.get('DATABASE_URL') |
+      | Testing        | test          | TESTING=True, SQLALCHEMY_DATABASE_URI='sqlite:///:memory:' |
+    When I set FLASK_ENV environment variable
+    Then create_app() should load the appropriate config
+
+  Scenario: Blueprint registration for modular routes
+    Given the application uses Flask Blueprints
+    Then blueprints should be registered:
+      | Blueprint     | Prefix         | Purpose                    |
+      | seminar_bp    | /seminar       | Seminar CRUD operations    |
+      | auth_bp       | /auth          | Login/Logout/Registration  |
+      | dashboard_bp  | /dashboard     | Dashboard and statistics   |
+      | api_bp        | /api           | REST endpoints for HTMX    |
+    And each blueprint should have its own templates and static files
+
+  Scenario: Extension initialization in factory
+    Given the application uses Flask extensions
+    Then extensions should be initialized:
+      | Extension        | Purpose                          | Initialization                |
+      | SQLAlchemy       | Database ORM                     | db = SQLAlchemy()             |
+      | LoginManager     | User session management          | login_manager = LoginManager() |
+      | WTF              | Form handling with CSRF          | CSRFProtect(app)              |
+      | Mail             | Email sending                    | mail = Mail()                 |
+      | Migrate          | Database migrations              | migrate = Migrate(app, db)    |
+      | Celery           | Background tasks                 | celery = Celery(app.name)     |
+    And each extension is configured via app.config
+
+
+  # ============================================================
+  # SQLITE & DATABASE SPECIFICATIONS
+  # ============================================================
+  
+  Scenario: SQLite by default with SQLAlchemy
+    Given the application uses SQLAlchemy
+    And DATABASE_URL is not set in environment
+    Then SQLALCHEMY_DATABASE_URI should default to 'sqlite:///seminar.db'
+    # Flask: app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///seminar.db'
+    And the database file should be created in the instance folder
+    And SQLALCHEMY_TRACK_MODIFICATIONS should be False
+
+  Scenario: Database agnostic design with SQLAlchemy
+    Given the application supports multiple databases
+    Then switching to PostgreSQL should only require changing DATABASE_URL:
+      | Environment Variable | Value                                |
+      | DATABASE_URL         | postgresql://user:pass@localhost:5432/seminars |
+    And SQLAlchemy should handle the connection via:
+      # app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+    And all models should use generic SQLAlchemy types (no database-specific types)
+
+  Scenario: Database migrations with Alembic
+    Given the application uses Flask-Migrate
+    When I run flask db migrate -m "Initial migration"
+    Then Alembic should generate migration scripts
+    And the migration should work on both SQLite and PostgreSQL
+    When I run flask db upgrade
+    Then the database schema should be updated
+    And the migration history should be tracked in alembic_version table
+
+  Scenario: Database connection pooling (PostgreSQL)
+    Given the application connects to PostgreSQL in production
+    Then SQLAlchemy should use connection pooling:
+      # app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+      #     'pool_size': 10,
+      #     'pool_recycle': 3600,
+      #     'pool_pre_ping': True
+      # }
+    And the pool should handle connection timeouts gracefully
+
+
+  # ============================================================
+  # DOCKER & DEPLOYMENT SPECIFICATIONS
+  # ============================================================
+  
+  Scenario: Docker container with Gunicorn
+    Given the application is Dockerized
+    And the Dockerfile uses python:3.11-slim base image
+    Then the container should:
+      | Step                    | Command                                    |
+      | Install dependencies    | pip install -r requirements.txt           |
+      | Set working directory   | WORKDIR /app                               |
+      | Copy application        | COPY . .                                   |
+      | Expose port             | EXPOSE 5000                                |
+      | Run with Gunicorn       | CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "wsgi:app"] |
+    And the wsgi.py should use create_app() factory
+
+  Scenario: Docker multi-container setup with docker-compose
+    Given the application has docker-compose.yml
+    Then the services should include:
+      | Service   | Image                     | Port   | Purpose                 |
+      | web       | seminar-tracker:latest    | 5000   | Flask + Gunicorn       |
+      | db        | postgres:15-alpine        | 5432   | PostgreSQL database    |
+      | redis     | redis:7-alpine            | 6379   | Celery broker          |
+      | celery    | seminar-tracker:latest    | -      | Background workers     |
+      | celery-beat | seminar-tracker:latest  | -      | Scheduled tasks        |
+    And volumes should persist:
+      | Volume Name     | Mount Path              |
+      | postgres_data   | /var/lib/postgresql/data |
+      | instance_data   | /app/instance           |
+      | static_volume   | /app/static             |
+      | media_volume    | /app/media              |
+
+  Scenario: Environment variables via .env file
+    Given the project uses python-dotenv
+    Then settings should read from .env file:
+      | Variable          | Purpose                          | Default               |
+      | FLASK_ENV         | Environment mode                 | development           |
+      | SECRET_KEY        | Flask secret key                 | (auto-generated)      |
+      | DATABASE_URL      | Database connection string       | sqlite:///seminar.db  |
+      | REDIS_URL         | Redis connection for Celery      | redis://redis:6379/0  |
+      | MAIL_SERVER       | SMTP server for emails           | smtp.gmail.com        |
+      | MAIL_PORT         | SMTP port                        | 587                   |
+      | MAIL_USERNAME     | SMTP username                    | (not set)             |
+      | MAIL_PASSWORD     | SMTP password                    | (not set)             |
+      | CELERY_BROKER_URL | Celery broker URL                | redis://redis:6379/0  |
+
+  Scenario: Production deployment with reverse proxy
+    Given the application is deployed behind Nginx
+    Then Nginx should:
+      | Configuration          | Value                              |
+      | Proxy pass             | http://web:5000                    |
+      | Static files serving   | /static/ -> /app/static            |
+      | Media files serving    | /media/ -> /app/media              |
+      | SSL termination        | Let's Encrypt certificates         |
+      | Rate limiting          | 100 requests per minute per IP     |
+    And the Flask app should have:
+      app.config['PREFERRED_URL_SCHEME'] = 'https'
+      app.config['SERVER_NAME'] = 'seminartracker.com'
+
+  Scenario: Health check endpoint
+    Given the application is running
+    When I request "/health"
+    Then Flask should return:
+      | Status | Response                        |
+      | 200 OK | {"status": "healthy", "database": "connected"} |
+    # Flask route: @app.route('/health') checks database connection
+
+
+  # ============================================================
+  # HTMX SPECIFIC BEHAVIORS
+  # ============================================================
+  
+  Scenario: Optimistic UI updates with HTMX
+    When I click "Mark as Favorite" on a seminar
+    # HTMX: hx-post="/seminar/123/favorite/" with hx-target="this" hx-swap="outerHTML"
+    Then the button should immediately show loading state
+    # HTMX: hx-indicator="closest .favorite-btn" with spinning icon
+    And Flask should update the favorite status in the database
+    And the button should update to "★" (favorite) state
+    And the list should re-sort automatically
+
+  Scenario: HTMX with Flask flash messages
+    When I delete a seminar
+    # HTMX: hx-delete="/seminar/456/delete/" with hx-confirm="Are you sure?"
+    Then the seminar should disappear from the list
+    And Flask flash messages should be shown via HTMX:
+      flash('Seminar deleted successfully', 'success')
+    # Template: {% include 'partials/messages.html' %} with hx-swap-oob="true"
+    And the message should appear at the top of the page
+    # HTMX: hx-swap-oob="true" for out-of-band swap
+
+  Scenario: Infinite scroll with HTMX and Flask pagination
+    Given the view uses Flask pagination with 20 per page
+    When I scroll to the bottom of the list
+    Then the next page should load via HTMX
+    And the pagination element should show "Page 3 of 5"
+    And the URL should update via hx-push-url
+    And when the last page is reached, a "No more seminars" message should appear
+
+  Scenario: HTMX CSRF token handling
+    Given all HTMX POST requests need CSRF protection
+    Then each HTMX request should include the CSRF token:
+      # In templates: <meta name="csrf-token" content="{{ csrf_token() }}">
+      # HTMX config: hx-headers='{"X-CSRFToken": "{{ csrf_token() }}"}'
+    And Flask-WTF should validate the CSRF token on all POST routes
+
+
+  # ============================================================
+  # PERFORMANCE & SECURITY
+  # ============================================================
+  
+  Scenario: Caching expensive queries with Flask-Caching
+    Given I have statistics on the dashboard
+    Then the view should use cache.get() and cache.set() for stats
+    # Flask-Caching: @cached(timeout=300) or manual cache
+    And the cache should be invalidated when a seminar is added/deleted
+    # Flask: cache.delete('total_hours') on POST/PUT/DELETE
+
+  Scenario: Rate limiting with Flask-Limiter
+    When I click "Export to Excel" more than 5 times in 1 minute
+    Then Flask should return 429 Too Many Requests
+    # Flask-Limiter: @limiter.limit("5 per minute")
+
+  Scenario: SQL Injection protection via SQLAlchemy
+    When I search for a seminar
+    Then SQLAlchemy should use parameterized queries automatically
+    # No raw SQL used - only .filter() with safe methods
+    And user input should be sanitized by Flask-WTF forms
+
+  Scenario: Cross-Site Request Forgery (CSRF) protection
+    When I submit a form
+    Then the form should contain {{ form.csrf_token }}
+    And Flask-WTF should validate the CSRF token on all POST requests
+    And HTMX requests should include the CSRF token in headers
+
+  Scenario: Session security with Flask-Login
+    Given a user is logged in
+    Then the session should have:
+      | Security Feature     | Implementation                           |
+      | Session cookie       | Secure=True (HTTPS only)                 |
+      | HTTPOnly cookie      | Prevents XSS access                      |
+      | SameSite cookie      | Lax (CSRF protection)                    |
+      | Session expiration   | app.config['PERMANENT_SESSION_LIFETIME'] |
+      | Login timeout        | 30 days                                  |
+    And login_user() should handle remember-me functionality
+
+
+  # ============================================================
+  # TESTING & QUALITY ASSURANCE
+  # ============================================================
+  
+  Scenario: Unit tests with pytest
+    Given the application uses pytest for testing
+    Then tests should cover:
+      | Test Type          | Example                                  |
+      | Model tests        | Test Seminar model validation            |
+      | View tests         | Test dashboard returns 200 OK            |
+      | Form tests         | Test SeminarForm validation              |
+      | Authentication     | Test login_required redirects            |
+      | HTMX integration   | Test HTMX endpoints return partials      |
+    And pytest fixtures should create test database
+
+  Scenario: Database rollback in tests
+    Given the testing configuration uses SQLite in-memory
+    When I run tests
+    Then each test should run in a transaction:
+      # pytest fixture: db_session with rollback
+    And the database should be clean between tests
+    And test database should not persist after test run
+
+  Scenario: Code quality with flake8 and black
+    Given the application follows PEP 8 standards
+    Then pre-commit hooks should run:
+      | Tool      | Purpose                     |
+      | black     | Auto-format code            |
+      | flake8    | Lint check                  |
+      | mypy      | Static type checking        |
+      | isort     | Sort imports                |
+    And CI pipeline should fail on violations
+
+  Scenario: Coverage reporting with pytest-cov
+    Given the application has tests
+    When I run pytest --cov=seminars
+    Then the coverage report should show:
+      | Minimum Coverage | Target |
+      | Models           | 95%    |
+      | Views            | 90%    |
+      | Forms            | 95%    |
+      | Overall          | 85%    |
+    And HTML coverage report should be generated
+
+
+  # ============================================================
+  # LOGGING & MONITORING
+  # ============================================================
+  
+  Scenario: Application logging with Flask
+    Given the application is running
+    Then logs should include:
+      | Log Level | Use Case                            |
+      | DEBUG     | Development detailed logging        |
+      | INFO      | User actions (add, edit, delete)    |
+      | WARNING   | Slow queries (>500ms)               |
+      | ERROR     | Database errors, exceptions         |
+      | CRITICAL  | Application crashes                 |
+    And logs should be written to stdout/stderr in containers
+    And log rotation should be configured
+
+  Scenario: Performance monitoring with Flask-DebugToolbar (dev)
+    Given the application runs in development
+    When I access any page
+    Then Flask-DebugToolbar should show:
+      | Panel          | Information                          |
+      | SQLAlchemy     | Query count and execution time       |
+      | Cache          | Cache hits/misses                    |
+      | Request        | Headers and form data                |
+      | Template       | Template rendering time              |
+      | Logging        | Application logs                     |
+    And the toolbar should be hidden in production
+
+  Scenario: Error handling with custom error pages
+    Given the application has error handlers
+    Then the following errors should have custom pages:
+      | Error Code | Page Template        | User Experience          |
+      | 404        | errors/404.html      | Friendly "Page not found" |
+      | 403        | errors/403.html      | "Access denied" message  |
+      | 500        | errors/500.html      | "Something went wrong"   |
+      | 429        | errors/429.html      | "Too many requests"      |
+    And errors should be logged to application log
+
+
+  # ============================================================
+  # ADDITIONAL FEATURES (Optional)
+  # ============================================================
+  
+  Scenario: User profile with preferences
+    Given I am logged in
+    When I visit "/profile/"
+    Then I should see my user information
+    And I should be able to update:
+      | Preference        | Default | Options               |
+      | Items per page    | 20      | 10, 20, 50, 100      |
+      | Default sort      | date    | date, topic, speaker |
+      | Email updates     | true    | true/false            |
+    And preferences should persist in the database via SQLAlchemy
+
+  Scenario: Seminar tagging system
+    Given I can add tags to seminars
+    Then tags should be implemented with:
+      # Many-to-Many relationship between Seminar and Tag
+      # Tag model with name and slug fields
+      # HTMX autocomplete for existing tags
+    And I should be able to filter seminars by tags
+
+  Scenario: Calendar view of seminars
+    Given I have seminars with dates
+    When I click "Calendar View"
+    Then a calendar should display seminars on their dates
+    # HTMX: hx-get="/seminar/calendar/" returns full calendar view
+    And clicking a date should show seminars for that day
+    And events should be color-coded by organizer
+
+  Scenario: API endpoints for mobile apps
+    Given I want to access seminars via API
+    Then Flask should provide REST endpoints:
+      | Endpoint                | Method | Purpose                     |
+      | /api/seminars           | GET    | List seminars (JSON)       |
+      | /api/seminars           | POST   | Create seminar (JSON)      |
+      | /api/seminars/<id>      | GET    | Get single seminar         |
+      | /api/seminars/<id>      | PUT    | Update seminar             |
+      | /api/seminars/<id>      | DELETE | Delete seminar             |
+      | /api/seminars/export    | GET    | Export as JSON             |
+    And API should use Flask-JWT-Extended for authentication
+    And API responses should be JSON formatted

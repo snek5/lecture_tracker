@@ -1,0 +1,14 @@
+{% for seminar in seminars %}
+  <tr>
+    <td>{{ seminar.date }}</td>
+    <td>{{ seminar.topic }}</td>
+    <td>{{ seminar.speaker }}</td>
+    <td>{{ seminar.hours }}</td>
+    <td>{{ seminar.organizer }}</td>
+    <td>{{ seminar.notes or '' }}</td>
+  </tr>
+{% else %}
+  <tr>
+    <td colspan="6" class="text-center text-muted py-4">No seminars yet. Add your first one above.</td>
+  </tr>
+{% endfor %}

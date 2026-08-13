@@ -1,0 +1,35 @@
+<tr>
+  <td colspan="7">
+    <form method="post" action="/seminar/{{ seminar.id }}/inline_edit/" hx-post="/seminar/{{ seminar.id }}/inline_edit/" hx-target="closest tr" hx-swap="outerHTML" class="row g-2 align-items-end">
+      {{ form.hidden_tag() }}
+      <div class="col-md-2">
+        {{ form.date.label(class_='form-label small') }}
+        {{ form.date(class_='form-control form-control-sm') }}
+      </div>
+      <div class="col-md-2">
+        {{ form.topic.label(class_='form-label small') }}
+        {{ form.topic(class_='form-control form-control-sm') }}
+      </div>
+      <div class="col-md-2">
+        {{ form.speaker.label(class_='form-label small') }}
+        {{ form.speaker(class_='form-control form-control-sm') }}
+      </div>
+      <div class="col-md-1">
+        {{ form.hours.label(class_='form-label small') }}
+        {{ form.hours(class_='form-control form-control-sm') }}
+      </div>
+      <div class="col-md-2">
+        {{ form.organizer.label(class_='form-label small') }}
+        {{ form.organizer(class_='form-control form-control-sm') }}
+      </div>
+      <div class="col-md-2">
+        {{ form.notes.label(class_='form-label small') }}
+        {{ form.notes(class_='form-control form-control-sm') }}
+      </div>
+      <div class="col-md-1 d-flex gap-2 justify-content-end">
+        <button type="submit" class="btn btn-sm btn-success">Save</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" hx-get="/seminar/{{ seminar.id }}/inline_view/" hx-target="closest tr" hx-swap="outerHTML">Cancel</button>
+      </div>
+    </form>
+  </td>
+</tr>

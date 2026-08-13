@@ -1,0 +1,12 @@
+<tr id="seminar-row-{{ seminar.id }}">
+  <td>{{ seminar.date }}</td>
+  <td>{{ seminar.topic }}</td>
+  <td>{{ seminar.speaker }}</td>
+  <td>{{ seminar.hours }}</td>
+  <td>{{ seminar.organizer }}</td>
+  <td>{{ seminar.notes or '' }}</td>
+  <td class="text-end">
+    <button type="button" class="btn btn-sm btn-outline-primary me-2" hx-get="/seminar/{{ seminar.id }}/inline_edit/" hx-target="closest tr" hx-swap="outerHTML">Edit</button>
+    <button type="button" class="btn btn-sm btn-outline-danger" data-delete-id="{{ seminar.id }}">Delete</button>
+  </td>
+</tr>
