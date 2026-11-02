@@ -1,12 +1,33 @@
-<tr>
-  <td>{{ seminar.date }}</td>
-  <td>{{ seminar.topic }}</td>
-  <td>{{ seminar.speaker }}</td>
-  <td>{{ seminar.hours }}</td>
-  <td>{{ seminar.organizer }}</td>
-  <td>{{ seminar.notes or '' }}</td>
-  <td class="text-end">
-    <button type="button" class="btn btn-sm btn-outline-primary me-2" hx-get="/seminar/{{ seminar.id }}/inline_edit/" hx-target="closest tr" hx-swap="outerHTML">Edit</button>
-    <button type="button" class="btn btn-sm btn-outline-danger delete-btn" data-delete-url="/seminar/{{ seminar.id }}/delete/">Delete</button>
+<tr id="seminar-row-{{ seminar.id }}">
+  <td>
+    {% if seminar.date %}
+      <span class="date-badge" title="{{ seminar.date.strftime('%A, %d %B %Y') }}">
+        <span class="mon">{{ seminar.date.strftime('%b') }}</span>
+        <span class="day">{{ seminar.date.day }}</span>
+        <span class="yr">{{ seminar.date.year }}</span>
+      </span>
+    {% endif %}
+  </td>
+  <td><span class="topic">{{ seminar.topic }}</span></td>
+  <td>
+    <span class="speaker">
+      <span class="avatar" aria-hidden="true">{{ (seminar.speaker or '?')[:1] | upper }}</span>
+      {{ seminar.speaker }}
+    </span>
+  </td>
+  <td><span class="hours-pill"><i class="bi bi-clock" aria-hidden="true"></i>{{ '%g' | format(seminar.hours or 0) }}h</span></td>
+  <td><span class="org-tag" title="{{ seminar.organizer }}">{{ seminar.organizer }}</span></td>
+  <td class="notes-cell d-none d-lg-table-cell">
+    {% if seminar.notes %}<span class="clamp" title="{{ seminar.notes }}">{{ seminar.notes }}</span>{% else %}<span class="text-body-tertiary">—</span>{% endif %}
+  </td>
+  <td class="text-end row-actions">
+    <button type="button" class="btn-icon" title="Edit" aria-label="Edit {{ seminar.topic }}"
+            hx-get="/seminar/{{ seminar.id }}/inline_edit/" hx-target="closest tr" hx-swap="outerHTML">
+      <i class="bi bi-pencil-square"></i>
+    </button>
+    <button type="button" class="btn-icon btn-icon-danger delete-btn" title="Delete" aria-label="Delete {{ seminar.topic }}"
+            data-delete-url="/seminar/{{ seminar.id }}/delete/" data-topic="{{ seminar.topic }}">
+      <i class="bi bi-trash3"></i>
+    </button>
   </td>
 </tr>

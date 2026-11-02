@@ -1,53 +1,98 @@
 {% extends 'base.html' %}
+{% block title %}Dashboard · Seminar Tracker{% endblock %}
+
+{% macro sort_header(field, label) %}
+  {% set active = sort_by == field %}
+  {% set next_dir = 'desc' if active and direction == 'asc' else 'asc' %}
+  <a href="/dashboard/?q={{ (search or '') | urlencode }}&sort_by={{ field }}&direction={{ next_dir }}" class="{{ 'is-sorted' if active }}">
+    {{ label }}
+    {% if active %}
+      <i class="bi {{ 'bi-arrow-up' if direction == 'asc' else 'bi-arrow-down' }}" aria-hidden="true"></i>
+    {% else %}
+      <i class="bi bi-arrow-down-up opacity-50" aria-hidden="true"></i>
+    {% endif %}
+  </a>
+{% endmacro %}
+
 {% block content %}
-  <div class="d-flex justify-content-between align-items-center mb-4">
+  {% set hour_word = 'hour' if total_hours == 1 else 'hours' %}
+  {% set seminar_word = 'seminar' if total_seminars == 1 else 'seminars' %}
+
+  <header class="page-header">
     <div>
-      <p class="text-primary fw-semibold mb-1">Overview</p>
-      <h1 class="mb-0">Dashboard</h1>
+      <div class="eyebrow"><i class="bi bi-stars" aria-hidden="true"></i>Dashboard</div>
+      <h1 class="page-title">Welcome back, {{ current_user.username }}</h1>
+      <p class="page-subtitle">
+        {% if total_seminars %}
+          You've logged <strong>{{ '%g' | format(total_hours) }} {{ hour_word }}</strong> of learning across {{ total_seminars }} {{ seminar_word }}. Keep it up!
+        {% else %}
+          Start your learning record by adding the first seminar you attended.
+        {% endif %}
+      </p>
     </div>
-    <div>
-      <button type="button" class="btn btn-primary me-2" hx-get="/seminar/create/" hx-target="#seminar-modal-container" hx-swap="innerHTML">Add New Seminar</button>
-      <a href="/seminar/export" class="btn btn-outline-success">Export to Excel</a>
+    <div class="header-actions d-flex gap-2">
+      <a href="/seminar/export" class="btn btn-gold"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Export to Excel</a>
+      <button type="button" id="add-seminar-btn" class="btn btn-primary" hx-get="/seminar/create/" hx-target="#seminar-modal-container" hx-swap="innerHTML">
+        <i class="bi bi-plus-lg me-1"></i>Add New Seminar
+      </button>
     </div>
-  </div>
+  </header>
 
   <div class="row g-3 mb-4">
-    <div class="col-md-3">
-      <div class="card metric-card p-3 h-100">
-        <div class="stat-label">Total Seminars</div>
-        <div class="stat-value">{{ total_seminars }}</div>
+    <div class="col-6 col-lg-3">
+      <div class="card stat-card">
+        <span class="stat-icon tone-brand" aria-hidden="true"><i class="bi bi-journal-bookmark"></i></span>
+        <div>
+          <div class="stat-label">Total Seminars</div>
+          <div class="stat-value">{{ total_seminars }}</div>
+        </div>
       </div>
     </div>
-    <div class="col-md-3">
-      <div class="card metric-card p-3 h-100">
-        <div class="stat-label">Total Hours</div>
-        <div class="stat-value">{{ total_hours }}</div>
+    <div class="col-6 col-lg-3">
+      <div class="card stat-card">
+        <span class="stat-icon tone-gold" aria-hidden="true"><i class="bi bi-hourglass-split"></i></span>
+        <div>
+          <div class="stat-label">Total Hours</div>
+          <div class="stat-value">{{ '%g' | format(total_hours) }}<small>h</small></div>
+        </div>
       </div>
     </div>
-    <div class="col-md-3">
-      <div class="card metric-card p-3 h-100">
-        <div class="stat-label">Average Hours</div>
-        <div class="stat-value">{{ avg_hours }}</div>
+    <div class="col-6 col-lg-3">
+      <div class="card stat-card">
+        <span class="stat-icon tone-green" aria-hidden="true"><i class="bi bi-speedometer2"></i></span>
+        <div>
+          <div class="stat-label">Average Hours</div>
+          <div class="stat-value">{{ '%.1f' | format(avg_hours) }}<small>h</small></div>
+        </div>
       </div>
     </div>
-    <div class="col-md-3">
-      <div class="card metric-card p-3 h-100">
-        <div class="stat-label">Unique Organizers</div>
-        <div class="stat-value">{{ unique_organizers }}</div>
+    <div class="col-6 col-lg-3">
+      <div class="card stat-card">
+        <span class="stat-icon tone-blue" aria-hidden="true"><i class="bi bi-people"></i></span>
+        <div>
+          <div class="stat-label">Unique Organizers</div>
+          <div class="stat-value">{{ unique_organizers }}</div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="card shadow-sm border-0 mb-4">
-    <div class="card-body">
-      <div class="row g-3 align-items-center">
-        <div class="col-md-6">
-          <form method="get" action="/dashboard/" class="d-flex gap-2">
-            <input type="search" name="q" value="{{ search or '' }}" class="form-control" placeholder="Search topic, speaker, organizer, notes">
+  <div class="card table-card">
+    <div class="toolbar border-bottom">
+      <div class="row g-2 align-items-center">
+        <div class="col-lg-7">
+          <form method="get" action="/dashboard/" class="d-flex gap-2" role="search">
+            <input type="hidden" name="sort_by" value="{{ sort_by }}">
+            <input type="hidden" name="direction" value="{{ direction }}">
+            <div class="search-field">
+              <i class="bi bi-search" aria-hidden="true"></i>
+              <input type="search" name="q" value="{{ search or '' }}" class="form-control" placeholder="Search topic, speaker, organizer or notes" aria-label="Search seminars">
+            </div>
             <button type="submit" class="btn btn-primary">Search</button>
           </form>
         </div>
-        <div class="col-md-6 d-flex justify-content-md-end gap-2">
+        <div class="col-lg-5 d-flex justify-content-lg-end align-items-center gap-2">
+          <label for="sort-field" class="toolbar-label"><i class="bi bi-sort-down me-1"></i>Sort by</label>
           <select id="sort-field" class="form-select w-auto" aria-label="Sort by field">
             <option value="date" {% if sort_by == 'date' %}selected{% endif %}>Date</option>
             <option value="topic" {% if sort_by == 'topic' %}selected{% endif %}>Topic</option>
@@ -55,69 +100,78 @@
             <option value="hours" {% if sort_by == 'hours' %}selected{% endif %}>Hours</option>
             <option value="organizer" {% if sort_by == 'organizer' %}selected{% endif %}>Organizer</option>
           </select>
-          <button id="sort-direction" type="button" class="btn btn-outline-secondary">
-            {% if direction == 'asc' %}Ascending{% else %}Descending{% endif %}
+          <button id="sort-direction" type="button" class="btn btn-outline-secondary text-nowrap" title="Toggle sort direction">
+            {% if direction == 'asc' %}<i class="bi bi-sort-up me-1"></i>Ascending{% else %}<i class="bi bi-sort-down me-1"></i>Descending{% endif %}
           </button>
         </div>
       </div>
     </div>
-  </div>
 
-  <div class="card shadow-sm border-0">
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-          <thead>
-            <tr>
-              <th><a href="/dashboard/?q={{ search or '' }}&sort_by=date&direction={% if sort_by == 'date' and direction == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none">Date</a></th>
-              <th><a href="/dashboard/?q={{ search or '' }}&sort_by=topic&direction={% if sort_by == 'topic' and direction == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none">Topic</a></th>
-              <th><a href="/dashboard/?q={{ search or '' }}&sort_by=speaker&direction={% if sort_by == 'speaker' and direction == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none">Speaker</a></th>
-              <th><a href="/dashboard/?q={{ search or '' }}&sort_by=hours&direction={% if sort_by == 'hours' and direction == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none">Hours</a></th>
-              <th><a href="/dashboard/?q={{ search or '' }}&sort_by=organizer&direction={% if sort_by == 'organizer' and direction == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none">Organizer</a></th>
-              <th>Notes</th>
-              <th class="text-end">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="seminar-list">
-            {% for seminar in seminars %}
-              <tr>
-                <td>{{ seminar.date }}</td>
-                <td>{{ seminar.topic }}</td>
-                <td>{{ seminar.speaker }}</td>
-                <td>{{ seminar.hours }}</td>
-                <td>{{ seminar.organizer }}</td>
-                <td>{{ seminar.notes or '' }}</td>
-                <td class="text-end">
-                  <button type="button" class="btn btn-sm btn-outline-primary me-2" hx-get="/seminar/{{ seminar.id }}/inline_edit/" hx-target="closest tr" hx-swap="outerHTML">Edit</button>
-                  <button type="button" class="btn btn-sm btn-outline-danger delete-btn" data-delete-url="/seminar/{{ seminar.id }}/delete/">Delete</button>
-                </td>
-              </tr>
-            {% else %}
-              <tr>
-                <td colspan="7" class="text-center text-muted py-4">No seminars yet. Add your first one above.</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+    {% if search %}
+      <div class="result-meta">
+        <span><strong>{{ seminars | length }}</strong> result{{ '' if seminars | length == 1 else 's' }} for “{{ search }}”</span>
+        <a href="/dashboard/?sort_by={{ sort_by }}&direction={{ direction }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-lg me-1"></i>Clear search</a>
       </div>
+    {% endif %}
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>{{ sort_header('date', 'Date') }}</th>
+            <th>{{ sort_header('topic', 'Topic') }}</th>
+            <th>{{ sort_header('speaker', 'Speaker') }}</th>
+            <th>{{ sort_header('hours', 'Hours') }}</th>
+            <th>{{ sort_header('organizer', 'Organizer') }}</th>
+            <th class="d-none d-lg-table-cell">Notes</th>
+            <th class="text-end"><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody id="seminar-list">
+          {% for seminar in seminars %}
+            {% include 'partials/seminar_inline_view.html' %}
+          {% else %}
+            <tr>
+              <td colspan="7">
+                <div class="empty-state">
+                  {% if search %}
+                    <div class="empty-illustration"><i class="bi bi-search"></i></div>
+                    <h3>No matches found</h3>
+                    <p>Nothing matches “{{ search }}”. Try a different word, or clear the search to see everything.</p>
+                    <a href="/dashboard/" class="btn btn-outline-secondary">Clear search</a>
+                  {% else %}
+                    <div class="empty-illustration"><i class="bi bi-journal-plus"></i></div>
+                    <h3>No seminars yet</h3>
+                    <p>Every talk you attend counts. Add your first one and watch your learning hours grow.</p>
+                    <button type="button" class="btn btn-primary" hx-get="/seminar/create/" hx-target="#seminar-modal-container" hx-swap="innerHTML">
+                      <i class="bi bi-plus-lg me-1"></i>Add your first seminar
+                    </button>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </div>
 
   <div id="seminar-modal-container"></div>
 
-  <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
+  <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title">Confirm delete</h5>
+          <span class="modal-icon tone-danger" aria-hidden="true"><i class="bi bi-trash3"></i></span>
+          <div class="me-auto">
+            <h5 class="modal-title" id="deleteConfirmTitle">Delete this seminar?</h5>
+            <p class="modal-subtitle"><span id="deleteTopicName">This seminar</span> will be removed from your record. This can't be undone.</p>
+          </div>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <div class="modal-body">
-          Are you sure you want to delete this seminar?
-        </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Keep it</button>
+          <button type="button" class="btn btn-danger" id="confirmDeleteBtn"><i class="bi bi-trash3 me-1"></i>Delete</button>
         </div>
       </div>
     </div>
@@ -127,10 +181,15 @@
     if (!window.__seminarModalInitialized) {
       window.__seminarModalInitialized = true;
       document.addEventListener('htmx:afterSwap', function (event) {
+        if (!event.detail.target || event.detail.target.id !== 'seminar-modal-container') return;
         const modalTarget = document.getElementById('seminarModal');
         if (!modalTarget) return;
-        const modal = new bootstrap.Modal(modalTarget, { backdrop: true, keyboard: true });
+        const modal = bootstrap.Modal.getOrCreateInstance(modalTarget, { backdrop: true, keyboard: true });
         modal.show();
+        modalTarget.addEventListener('shown.bs.modal', function () {
+          const first = modalTarget.querySelector('input:not([type=hidden])');
+          if (first) first.focus();
+        }, { once: true });
 
         modalTarget.addEventListener('hidden.bs.modal', function () {
           modalTarget.remove();
@@ -141,8 +200,8 @@
     document.addEventListener('DOMContentLoaded', function () {
       const sortField = document.getElementById('sort-field');
       const sortDirection = document.getElementById('sort-direction');
-      const searchForm = document.querySelector('form[action="/dashboard/"]');
       const deleteModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+      const deleteTopicName = document.getElementById('deleteTopicName');
       let deleteUrl = '';
 
       if (sortField && sortDirection) {
@@ -162,17 +221,20 @@
         });
       }
 
-      document.querySelectorAll('.delete-btn').forEach(function (button) {
-        button.addEventListener('click', function () {
-          deleteUrl = this.dataset.deleteUrl;
-          deleteModal.show();
-        });
+      // Delegated so rows swapped in by inline edit keep a working delete button.
+      document.addEventListener('click', function (event) {
+        const button = event.target.closest('.delete-btn');
+        if (!button) return;
+        deleteUrl = button.dataset.deleteUrl;
+        deleteTopicName.textContent = button.dataset.topic ? `“${button.dataset.topic}”` : 'This seminar';
+        deleteModal.show();
       });
 
       const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
       if (confirmDeleteBtn) {
         confirmDeleteBtn.addEventListener('click', function () {
           if (!deleteUrl) return;
+          confirmDeleteBtn.disabled = true;
           fetch(deleteUrl, {
             method: 'POST',
             headers: {
