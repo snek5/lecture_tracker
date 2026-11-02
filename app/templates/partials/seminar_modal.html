@@ -1,8 +1,13 @@
-<div class="modal fade" id="seminarModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
+{% set is_edit = submit_label and 'Update' in submit_label %}
+<div class="modal fade" id="seminarModal" tabindex="-1" aria-labelledby="seminarModalTitle" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-fullscreen-sm-down">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">{{ modal_title or 'Add New Seminar' }}</h5>
+        <span class="modal-icon" aria-hidden="true"><i class="bi {{ 'bi-pencil-square' if is_edit else 'bi-journal-plus' }}"></i></span>
+        <div class="me-auto">
+          <h5 class="modal-title" id="seminarModalTitle">{{ modal_title or 'Add New Seminar' }}</h5>
+          <p class="modal-subtitle">{{ 'Tweak the details below and save your changes.' if is_edit else 'Log a talk you attended — it only takes a moment.' }}</p>
+        </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">

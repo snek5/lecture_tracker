@@ -1,34 +1,21 @@
-<tr>
+<tr class="inline-edit-row" id="seminar-row-{{ seminar.id }}">
   <td colspan="7">
     <form method="post" action="/seminar/{{ seminar.id }}/inline_edit/" hx-post="/seminar/{{ seminar.id }}/inline_edit/" hx-target="closest tr" hx-swap="outerHTML" class="row g-2 align-items-end">
       {{ form.hidden_tag() }}
-      <div class="col-md-2">
-        {{ form.date.label(class_='form-label small') }}
-        {{ form.date(class_='form-control form-control-sm') }}
-      </div>
-      <div class="col-md-2">
-        {{ form.topic.label(class_='form-label small') }}
-        {{ form.topic(class_='form-control form-control-sm') }}
-      </div>
-      <div class="col-md-2">
-        {{ form.speaker.label(class_='form-label small') }}
-        {{ form.speaker(class_='form-control form-control-sm') }}
-      </div>
-      <div class="col-md-1">
-        {{ form.hours.label(class_='form-label small') }}
-        {{ form.hours(class_='form-control form-control-sm') }}
-      </div>
-      <div class="col-md-2">
-        {{ form.organizer.label(class_='form-label small') }}
-        {{ form.organizer(class_='form-control form-control-sm') }}
-      </div>
-      <div class="col-md-2">
-        {{ form.notes.label(class_='form-label small') }}
-        {{ form.notes(class_='form-control form-control-sm') }}
-      </div>
-      <div class="col-md-1 d-flex gap-2 justify-content-end">
-        <button type="submit" class="btn btn-sm btn-success">Save</button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" hx-get="/seminar/{{ seminar.id }}/inline_view/" hx-target="closest tr" hx-swap="outerHTML">Cancel</button>
+      {% for field, cols in [(form.date, 'col-6 col-md-2'), (form.topic, 'col-6 col-md-2'), (form.speaker, 'col-6 col-md-2'), (form.hours, 'col-6 col-md-1'), (form.organizer, 'col-6 col-md-2'), (form.notes, 'col-6 col-md-2')] %}
+        <div class="{{ cols }}">
+          {{ field.label(class_='form-label') }}
+          {% if field.name == 'notes' %}
+            {{ field(class_='form-control form-control-sm' ~ (' is-invalid' if field.errors else ''), rows='1') }}
+          {% else %}
+            {{ field(class_='form-control form-control-sm' ~ (' is-invalid' if field.errors else '')) }}
+          {% endif %}
+          {% if field.errors %}<div class="field-error"><i class="bi bi-exclamation-circle"></i>{{ field.errors[0] }}</div>{% endif %}
+        </div>
+      {% endfor %}
+      <div class="col-12 col-md-1 d-flex gap-1 justify-content-end">
+        <button type="submit" class="btn btn-sm btn-success" title="Save"><i class="bi bi-check-lg"></i><span class="d-md-none ms-1">Save</span></button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Cancel" hx-get="/seminar/{{ seminar.id }}/inline_view/" hx-target="closest tr" hx-swap="outerHTML"><i class="bi bi-x-lg"></i><span class="d-md-none ms-1">Cancel</span></button>
       </div>
     </form>
   </td>
